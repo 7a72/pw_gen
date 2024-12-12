@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Password Generator</title>
+    <style>
+        body {
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Password Generator</h1>
+    <table>
+        <tr>
+            <td>ALGO</td>
+            <td>
+                <select id="algorithm">
+                    <option value="SHA-256">SHA256</option>
+                    <option value="SHA-512">SHA512</option>
+                </select>
+            </td>
+        </tr>
+        <tr>
+            <td>TEXT</td>
+            <td>
+                <input id="input" type="text" placeholder="username@website.com">
+            </td>
+        </tr>
+        <tr>
+            <td>HMAC</td>
+            <td><input id="key" type="text" placeholder="Key"></td>
+        </tr>
+        <tr>
+            <td>CASE</td>
+            <td>
+                <select id="case-type">
+                    <option value="none">None</option>
+                    <option value="lower">Lower</option>
+                    <option value="upper">Upper</option>
+                </select>
+            </td>
+        </tr>
+        <tr>
+            <td>SIZE</td>
+            <td>
+                <input id="password-length" type="range" max="32" min="8" step="1" value="12" oninput="updatePasswordLengthDisplay()" onchange="updatePasswordLengthDisplay()">
+                <br>
+                <span id="length-show">12</span>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2">
+                <pre id="password-result"></pre>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2">
+                <button onclick="generatePassword()">Generate</button>
+            </td>
+        </tr>
+    </table>
+
+    <script type="text/javascript">
+        async function generatePassword() {
+            let input = document.getElementById("input").value.trim();
+            let key = document.getElementById("key").value.trim();
+            let algorithm = document.getElementById("algorithm").value;
+            let passwordLength = document.getElementById("password-length").value.trim();
+            let caseType = document.getElementById("case-type").value;
+            if (input === "" || key === "") {
+                alert("Missing text or key.");
+                return;
+            }
+            switch (caseType) {
+                case "lower":
+                    input = input.toLowerCase();
+                    break;
+                case "upper":
+                    input = input.toUpperCase();
+                    break;
+                default:
+                    break;
+            }
+            const password = await computePasswordValue(input, key, algorithm, passwordLength);
+            const passwordResultElement = document.getElementById("password-result");
+            passwordResultElement.innerText = `${password}`;
+            passwordResultElement.addEventListener("click", function() {
+                const passwordText = passwordResultElement.innerText;
+                navigator.clipboard.writeText(passwordText)
+                    .then(() => {
+                        console.log("Password copied to clipboard!");
+                    })
+                    .catch(err => {
+                        console.error('Failed to copy: ', err);
+                    });
+            });
+        }
+        async function computePasswordValue(input, key, algorithm, passwordLength) {
+            const hmacKey = new TextEncoder().encode(key);
+            const cryptoKey = await window.crypto.subtle.importKey(
+                "raw", hmacKey, { name: "HMAC", hash: algorithm }, false, ["sign"]
+            );
+            const inputBuffer = new TextEncoder().encode(input);
+            const passwordBuffer = await window.crypto.subtle.sign("HMAC", cryptoKey, inputBuffer);
+            const hexPassword = Array.from(new Uint8Array(passwordBuffer)).map(byte =>
+                byte.toString(16).padStart(2, '0')
+            ).join('');
+            
+            const numberOfRails = 2;
+            let fence = [];
+            for (let i = 0; i < numberOfRails; i++) {
+                fence.push([]);
+            }
+            let rail = 0;
+            let direction = 1;
+            for (let char of hexPassword) {
+                fence[rail].push(char);
+                rail += direction;
+                if (rail === numberOfRails - 1 || rail === 0) {
+                    direction = -direction;
+                }
+            }
+            let encPassword = "";
+            fence.forEach(row => {
+                encPassword += row.join("");
+            });
+            return btoa(encPassword).substring(0, passwordLength);
+        }
+        window.updatePasswordLengthDisplay = function(){
+            document.getElementById('length-show').innerHTML = Math.max(parseInt(document.getElementById('password-length').value) || 12, 8);
+        }
+        document.addEventListener("DOMContentLoaded", function() {
+            updatePasswordLengthDisplay();
+        });
+    </script>
+</body>
+</html>
